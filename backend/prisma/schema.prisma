@@ -1,0 +1,282 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  TRAINER
+  CLIENT
+}
+
+enum MembershipStatus {
+  ACTIVE
+  PASSIVE
+  FROZEN
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  fullName  String
+  email     String   @unique
+  password  String
+  phone     String?
+  role      Role
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  trainerProfile TrainerProfile?
+  clientProfile  ClientProfile?
+  notifications  Notification[]
+  gymEntryLogs   GymEntryLog[]
+}
+
+model TrainerProfile {
+  id          Int     @id @default(autoincrement())
+  userId      Int     @unique
+  specialty   String?
+  bio         String?
+  isAvailable Boolean @default(true)
+
+  user         User                 @relation(fields: [userId], references: [id])
+  clients      ClientProfile[]
+  workingHours TrainerWorkingHour[]
+  appointments Appointment[]
+
+  aiProgramRequests AIProgramRequest[]
+}
+
+model ClientProfile {
+  id               Int              @id @default(autoincrement())
+  userId           Int              @unique
+  trainerId        Int?
+  gender           String?
+  birthDate        DateTime?
+  height           Float?
+  startWeight      Float?
+  targetWeight     Float?
+  membershipStart  DateTime?
+  membershipEnd    DateTime?
+  membershipStatus MembershipStatus @default(ACTIVE)
+  notes            String?
+
+  goal          String?
+  activityLevel String?
+  healthNotes   String?
+  injuryNotes   String?
+
+  user    User            @relation(fields: [userId], references: [id])
+  trainer TrainerProfile? @relation(fields: [trainerId], references: [id])
+
+  measurements         Measurement[]
+  programs             WorkoutProgram[]
+  specialLessons       TrainerSpecialLesson[]
+  completions          WorkoutCompletion[]
+  exerciseCompletions  ExerciseCompletion[]
+  setCompletions       ExerciseSetCompletion[]
+  appointments         Appointment[]
+
+  aiProgramRequests AIProgramRequest[]
+}
+
+model Measurement {
+  id        Int      @id @default(autoincrement())
+  weight    Float
+  bodyFat   Float?
+  height    Float?
+  bmi       Float?
+  waist     Float?
+  hip       Float?
+  shoulder  Float?
+  arm       Float?
+  leg       Float?
+  calf      Float?
+  note      String?
+  createdAt DateTime @default(now())
+
+  clientId Int
+  client   ClientProfile @relation(fields: [clientId], references: [id])
+}
+
+model WorkoutProgram {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?
+  startDate   DateTime?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  clientId Int
+  client   ClientProfile @relation(fields: [clientId], references: [id])
+
+  days WorkoutDay[]
+}
+
+model WorkoutDay {
+  id        Int      @id @default(autoincrement())
+  dayName   String
+  focus     String?
+  note      String?
+  createdAt DateTime @default(now())
+
+  programId Int
+  program   WorkoutProgram @relation(fields: [programId], references: [id])
+
+  exercises   WorkoutExercise[]
+  completions WorkoutCompletion[]
+}
+
+model WorkoutExercise {
+  id          Int     @id @default(autoincrement())
+  name        String
+  sets        Int?
+  reps        Int?
+  duration    String?
+  description String?
+  status      String? @default("PLANNED")
+  orderIndex  Int     @default(0)
+
+  dayId Int
+  day   WorkoutDay @relation(fields: [dayId], references: [id])
+
+  completions    ExerciseCompletion[]
+  setCompletions ExerciseSetCompletion[]
+}
+
+model WorkoutCompletion {
+  id          Int      @id @default(autoincrement())
+  completedAt DateTime @default(now())
+
+  clientId Int
+  client   ClientProfile @relation(fields: [clientId], references: [id])
+
+  dayId Int
+  day   WorkoutDay @relation(fields: [dayId], references: [id])
+
+  @@unique([clientId, dayId])
+}
+
+model ExerciseCompletion {
+  id          Int      @id @default(autoincrement())
+  isCompleted Boolean  @default(false)
+  weight      Float?
+  completedAt DateTime @default(now())
+
+  clientId Int
+  client   ClientProfile @relation(fields: [clientId], references: [id])
+
+  exerciseId Int
+  exercise   WorkoutExercise @relation(fields: [exerciseId], references: [id])
+
+  @@unique([clientId, exerciseId])
+}
+
+model ExerciseSetCompletion {
+  id          Int      @id @default(autoincrement())
+  setNumber   Int
+  isCompleted Boolean  @default(false)
+  weight      Float?
+  completedAt DateTime @default(now())
+
+  clientId Int
+  client   ClientProfile @relation(fields: [clientId], references: [id])
+
+  exerciseId Int
+  exercise   WorkoutExercise @relation(fields: [exerciseId], references: [id])
+
+  @@unique([clientId, exerciseId, setNumber])
+}
+
+model TrainerWorkingHour {
+  id          Int      @id @default(autoincrement())
+  dayName     String
+  isAvailable Boolean  @default(true)
+  startTime   String?
+  endTime     String?
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  trainerId Int
+  trainer   TrainerProfile @relation(fields: [trainerId], references: [id])
+
+  specialLessons TrainerSpecialLesson[]
+}
+
+model TrainerSpecialLesson {
+  id        Int      @id @default(autoincrement())
+  startTime String
+  endTime   String
+  createdAt DateTime @default(now())
+
+  workingHourId Int
+  workingHour   TrainerWorkingHour @relation(fields: [workingHourId], references: [id])
+
+  clientId Int?
+  client   ClientProfile? @relation(fields: [clientId], references: [id])
+}
+
+model Appointment {
+  id           Int      @id @default(autoincrement())
+  date         DateTime
+  startTime    String
+  endTime      String
+  status       String   @default("PENDING")
+  note         String?
+  cancelReason String?
+  createdAt    DateTime @default(now())
+
+  clientId Int
+  client   ClientProfile @relation(fields: [clientId], references: [id])
+
+  trainerId Int
+  trainer   TrainerProfile @relation(fields: [trainerId], references: [id])
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  title     String
+  message   String
+  type      String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+}
+
+model AIProgramRequest {
+  id               Int      @id @default(autoincrement())
+  clientId         Int
+  trainerId        Int
+  status           String   @default("PENDING")
+  programType      String
+  goal             String?
+  activityLevel    String?
+  bmi              Float?
+  healthNotes      String?
+  injuryNotes      String?
+  aiReason         String?
+  suggestedProgram Json
+  trainerNote      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  client  ClientProfile  @relation(fields: [clientId], references: [id])
+  trainer TrainerProfile @relation(fields: [trainerId], references: [id])
+}
+
+model GymEntryLog {
+  id        Int      @id @default(autoincrement())
+  type      String
+  createdAt DateTime @default(now())
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+}
